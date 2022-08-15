@@ -71,8 +71,7 @@ typedef struct Chunk
 	Oid hypertable_relid;
 
 	/* Privacy budget of the chunk */
-	// PrivacyBudget *privacy_budget;
-	PrivacyBudget privacy_budget;
+	PrivacyBudget *privacy_budget;
 	
 	/*
 	 * The hypercube defines the chunks position in the N-dimensional space.
