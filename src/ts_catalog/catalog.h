@@ -361,6 +361,9 @@ enum Anum_chunk
 	Anum_chunk_compressed_chunk_id,
 	Anum_chunk_dropped,
 	Anum_chunk_status,
+	Anum_chunk_initial_privacy_budget,
+	Anum_chunk_reserved_privacy_budget,
+	Anum_chunk_available_privacy_budget,
 	_Anum_chunk_max,
 };
 
@@ -375,6 +378,9 @@ typedef struct FormData_chunk
 	int32 compressed_chunk_id;
 	bool dropped;
 	int32 status;
+	float8 initial_privacy_budget;
+	float8 reserved_privacy_budget;
+	float8 available_privacy_budget;
 } FormData_chunk;
 
 typedef FormData_chunk *Form_chunk;

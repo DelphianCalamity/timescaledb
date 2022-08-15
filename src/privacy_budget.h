@@ -5,15 +5,19 @@
 
 #include <stdbool.h>
 
+typedef double float8;
+
 typedef struct PrivacyBudget
 {
-    float initial_budget;
-    float reserved_budget;
-	float available_budget;
+    float8 initial_budget;
+    float8 reserved_budget;
+	float8 available_budget;
 } PrivacyBudget;
 
 void ts_privacy_budget_init(PrivacyBudget *privacy_budget);
 bool ts_privacy_budget_is_exhausted(const PrivacyBudget *privacy_budget);
-void ts_privacy_budget_consume(PrivacyBudget *privacy_budget, float val);
+void ts_privacy_budget_consume(PrivacyBudget *privacy_budget, float8 val);
+PrivacyBudget* ts_copy_privacy_budget(PrivacyBudget *privacy_budget);
+
 
 #endif /* TIMESCALEDB_PRIVACY_BUDGET_H */

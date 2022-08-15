@@ -40,6 +40,9 @@ CREATE TABLE _timescaledb_catalog.chunk (
   compressed_chunk_id integer ,
   dropped boolean NOT NULL DEFAULT FALSE,
   status integer NOT NULL DEFAULT 0,
+  initial_budget float NOT NULL DEFAULT 10,
+  reserved_budget float NOT NULL DEFAULT 0,
+  available_budget float NOT NULL DEFAULT 10,
   UNIQUE (schema_name, table_name)
 );
 

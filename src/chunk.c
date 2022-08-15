@@ -173,7 +173,7 @@ static Chunk *get_chunks_in_time_range(Hypertable *ht, int64 older_than, int64 n
 bool
 ts_chunk_is_budget_exhausted(const Chunk *chunk)
 {
-	if (ts_privacy_budget_is_exhausted(&chunk->privacy_budget)) {
+	if (ts_privacy_budget_is_exhausted(chunk->privacy_budget)) {
 		return true;
 	}
 	return false;
@@ -201,6 +201,9 @@ chunk_formdata_make_tuple(const FormData_chunk *fd, TupleDesc desc)
 	}
 	values[AttrNumberGetAttrOffset(Anum_chunk_dropped)] = BoolGetDatum(fd->dropped);
 	values[AttrNumberGetAttrOffset(Anum_chunk_status)] = Int32GetDatum(fd->status);
+	values[AttrNumberGetAttrOffset(Anum_chunk_initial_privacy_budget)] = Float8GetDatum(fd->initial_privacy_budget);
+	values[AttrNumberGetAttrOffset(Anum_chunk_reserved_privacy_budget)] = Float8GetDatum(fd->reserved_privacy_budget);
+	values[AttrNumberGetAttrOffset(Anum_chunk_available_privacy_budget)] = Float8GetDatum(fd->available_privacy_budget);
 
 	return heap_form_tuple(desc, values, nulls);
 }
@@ -222,6 +225,10 @@ ts_chunk_formdata_fill(FormData_chunk *fd, const TupleInfo *ti)
 	Assert(!nulls[AttrNumberGetAttrOffset(Anum_chunk_table_name)]);
 	Assert(!nulls[AttrNumberGetAttrOffset(Anum_chunk_dropped)]);
 	Assert(!nulls[AttrNumberGetAttrOffset(Anum_chunk_status)]);
+	Assert(!nulls[AttrNumberGetAttrOffset(Anum_chunk_initial_privacy_budget)]);
+	Assert(!nulls[AttrNumberGetAttrOffset(Anum_chunk_reserved_privacy_budget)]);
+	Assert(!nulls[AttrNumberGetAttrOffset(Anum_chunk_available_privacy_budget)]);
+
 
 	fd->id = DatumGetInt32(values[AttrNumberGetAttrOffset(Anum_chunk_id)]);
 	fd->hypertable_id = DatumGetInt32(values[AttrNumberGetAttrOffset(Anum_chunk_hypertable_id)]);
@@ -240,6 +247,11 @@ ts_chunk_formdata_fill(FormData_chunk *fd, const TupleInfo *ti)
 
 	fd->dropped = DatumGetBool(values[AttrNumberGetAttrOffset(Anum_chunk_dropped)]);
 	fd->status = DatumGetInt32(values[AttrNumberGetAttrOffset(Anum_chunk_status)]);
+
+	fd->initial_privacy_budget = DatumGetFloat8(values[AttrNumberGetAttrOffset(Anum_chunk_initial_privacy_budget)]);
+	fd->reserved_privacy_budget = DatumGetFloat8(values[AttrNumberGetAttrOffset(Anum_chunk_reserved_privacy_budget)]);
+	fd->available_privacy_budget = DatumGetFloat8(values[AttrNumberGetAttrOffset(Anum_chunk_available_privacy_budget)]);
+
 
 	if (should_free)
 		heap_freetuple(tuple);
@@ -1065,8 +1077,10 @@ chunk_create_object(const Hypertable *ht, Hypercube *cube, const char *schema_na
 
 	chunk->privacy_budget = palloc(sizeof(PrivacyBudget));
 	ts_privacy_budget_init(chunk->privacy_budget);		// todo free space
-
-
+	chunk->fd.initial_privacy_budget = chunk->privacy_budget->initial_budget;
+	chunk->fd.reserved_privacy_budget = chunk->privacy_budget->reserved_budget;
+	chunk->fd.available_privacy_budget = chunk->privacy_budget->available_budget;
+	
 	if (NULL == table_name || table_name[0] == '\0')
 	{
 		int len;
@@ -1576,6 +1590,11 @@ ts_chunk_build_from_tuple_and_stub(Chunk **chunkptr, TupleInfo *ti, const ChunkS
 		chunk->cube = ts_hypercube_from_constraints(chunk->constraints, &it);
 		ts_scan_iterator_close(&it);
 	}
+
+	chunk->privacy_budget = palloc(sizeof(PrivacyBudget));
+	chunk->privacy_budget->initial_budget = chunk->fd.initial_privacy_budget;
+	chunk->privacy_budget->reserved_budget = chunk->fd.reserved_privacy_budget;
+	chunk->privacy_budget->available_budget = chunk->fd.available_privacy_budget;
 
 	return chunk;
 }
@@ -2247,6 +2266,8 @@ ts_chunk_copy(const Chunk *chunk)
 
 	copy->data_nodes = ts_chunk_data_nodes_copy(chunk);
 
+	if (NULL != chunk->privacy_budget)
+		copy->privacy_budget = ts_copy_privacy_budget(chunk->privacy_budget);
 	return copy;
 }
 
