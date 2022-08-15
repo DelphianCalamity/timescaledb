@@ -39,6 +39,9 @@ extern void _cache_fini(void);
 extern void _planner_init(void);
 extern void _planner_fini(void);
 
+extern void _executor_init(void);
+extern void _executor_fini(void);
+
 extern void _process_utility_init(void);
 extern void _process_utility_fini(void);
 
@@ -103,6 +106,7 @@ _PG_init(void)
 	_hypertable_cache_init();
 	_cache_invalidate_init();
 	_planner_init();
+	_executor_init();
 	_constraint_aware_append_init();
 	_chunk_append_init();
 	_event_trigger_init();

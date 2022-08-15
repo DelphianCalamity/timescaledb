@@ -65,6 +65,9 @@
 #include "ts_catalog/compression_chunk_size.h"
 #include "extension.h"
 #include "chunk_scan.h"
+// #include <privacy_budget.h>
+
+#define INITIAL_BUDGET 10.0
 
 TS_FUNCTION_INFO_V1(ts_chunk_show_chunks);
 TS_FUNCTION_INFO_V1(ts_chunk_drop_chunks);
@@ -168,6 +171,15 @@ static Chunk *get_chunks_in_time_range(Hypertable *ht, int64 older_than, int64 n
  *
  */
 #define CHUNK_STATUS_FROZEN 4
+
+bool
+ts_chunk_is_budget_exhausted(const Chunk *chunk)
+{
+	if (chunk->privacy_budget > 0.0001) {
+		return true;
+	}
+	return false;
+}
 
 static HeapTuple
 chunk_formdata_make_tuple(const FormData_chunk *fd, TupleDesc desc)
@@ -1052,7 +1064,7 @@ chunk_create_object(const Hypertable *ht, Hypercube *cube, const char *schema_na
 	chunk->cube = cube;
 	chunk->hypertable_relid = ht->main_table_relid;
 	namestrcpy(&chunk->fd.schema_name, schema_name);
-
+	chunk->privacy_budget = INITIAL_BUDGET;
 	if (NULL == table_name || table_name[0] == '\0')
 	{
 		int len;

@@ -68,6 +68,10 @@ typedef struct Chunk
 	Oid table_id;
 	Oid hypertable_relid;
 
+	/* Privacy budget of the chunk */
+	// PrivacyBudget *privacy_budget;
+	float privacy_budget;
+	
 	/*
 	 * The hypercube defines the chunks position in the N-dimensional space.
 	 * Each of the N slices in the cube corresponds to a constraint on the
@@ -138,6 +142,8 @@ typedef struct DisplayKeyData
 	const char *name;
 	const char *(*as_string)(Datum);
 } DisplayKeyData;
+
+ extern bool ts_chunk_is_budget_exhausted(const Chunk *chunk);
 
 extern void ts_chunk_formdata_fill(FormData_chunk *fd, const TupleInfo *ti);
 extern Chunk *ts_chunk_create_from_point(const Hypertable *ht, const Point *p, const char *schema,

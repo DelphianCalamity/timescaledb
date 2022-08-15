@@ -1107,6 +1107,17 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 			break;
 		case TS_REL_CHUNK:
 		case TS_REL_CHUNK_CHILD:
+
+			{
+				Chunk *ch = ts_chunk_get_by_relid(rte->relid, false);
+				Assert(ch != NULL);
+				if (ts_chunk_is_budget_exhausted(ch)) {
+					elog(ERROR, "out of budget");
+					return;
+				}
+			}
+
+
 			if (IS_UPDL_CMD(root->parse))
 			{
 				BaserelInfoEntry *chunk_cache_entry =
