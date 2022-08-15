@@ -65,7 +65,7 @@
 #include "ts_catalog/compression_chunk_size.h"
 #include "extension.h"
 #include "chunk_scan.h"
-// #include <privacy_budget.h>
+#include <privacy_budget.h>
 
 #define INITIAL_BUDGET 10.0
 
@@ -175,7 +175,7 @@ static Chunk *get_chunks_in_time_range(Hypertable *ht, int64 older_than, int64 n
 bool
 ts_chunk_is_budget_exhausted(const Chunk *chunk)
 {
-	if (chunk->privacy_budget > 0.0001) {
+	if (ts_privacy_budget_is_exhausted(&(chunk->privacy_budget))) {
 		return true;
 	}
 	return false;

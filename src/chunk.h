@@ -17,6 +17,8 @@
 #include "chunk_constraint.h"
 #include "hypertable.h"
 #include "export.h"
+#include <privacy_budget.h>
+
 
 #define INVALID_CHUNK_ID 0
 
@@ -70,7 +72,7 @@ typedef struct Chunk
 
 	/* Privacy budget of the chunk */
 	// PrivacyBudget *privacy_budget;
-	float privacy_budget;
+	PrivacyBudget privacy_budget;
 	
 	/*
 	 * The hypercube defines the chunks position in the N-dimensional space.
