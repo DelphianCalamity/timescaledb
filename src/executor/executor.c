@@ -60,6 +60,18 @@ void _executor_fini(void);
 
 static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 
+static void
+timescaledb_executor_end_hook(QueryDesc *queryDesc)
+{
+    Assert(queryDesc != NULL);
+
+    printf("lalala\n");
+    if (prev_ExecutorEnd)
+        prev_ExecutorEnd(queryDesc);
+    else
+        standard_ExecutorEnd(queryDesc);
+}
+
 void _executor_init(void)
 {	
     prev_ExecutorEnd = ExecutorEnd_hook;
@@ -72,16 +84,3 @@ void _executor_fini(void)
 
 }
 
-static void
-timescaledb_executor_end_hook(QueryDesc *queryDesc)
-{
-    Assert(query != NULL);
-    if (superuser())
-        elog(log_level, "superuser %s fired this query %s",
-        GetUserNameFromId(GetUserId()),
-        query);
-    if (prev_ExecutorEnd)
-        prev_ExecutorEnd(queryDesc);
-    else
-        standard_ExecutorEnd(queryDesc);
-}
