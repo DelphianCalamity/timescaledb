@@ -65,7 +65,6 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
 {
     Assert(queryDesc != NULL);
 
-    printf("lalala\n");
     if (prev_ExecutorFinish)
         prev_ExecutorFinish(queryDesc);
 
