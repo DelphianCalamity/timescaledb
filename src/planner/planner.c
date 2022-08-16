@@ -388,6 +388,51 @@ preprocess_query(Node *node, PreprocessQueryContext *context)
 	return expression_tree_walker(node, preprocess_query, context);
 }
 
+// static bool
+// get_query_id(Node *node, PreprocessQueryContext *context, List *rtes)
+// {
+// 	if (node == NULL)
+// 		return false;
+// 	if (IsA(node, Query))
+// 	{
+// 		Query *query = castNode(Query, node);
+// 		Query *prev_query;
+// 		Cache *hcache = planner_hcache_get();
+// 		ListCell *lc;
+// 		RangeTblEntry *rte;
+// 		Hypertable *ht;
+// 		bool ret;	
+// 		foreach (lc, query->rtable)
+// 		{
+// 			rte = lfirst_node(RangeTblEntry, lc);
+// 			switch (rte->rtekind)
+// 			{
+// 				case RTE_RELATION:
+// 					ht = ts_hypertable_cache_get_entry(hcache, rte->relid, CACHE_FLAG_MISSING_OK);
+// 					if (ht)
+// 					{
+// 						rtes = lappend(rtes, ht->fd.table_name.data);
+// 					}
+// 					else
+// 					{
+// 						Chunk *chunk = ts_chunk_get_by_relid(rte->relid, false);
+// 						rtes = lappend(rtes, chunk->fd.table_name.data);
+// 					}
+// 					break;
+// 				default:
+// 					break;
+// 			}
+// 		}
+// 		prev_query = context->current_query;
+// 		context->current_query = query;
+// 		ret = query_tree_walker(query, preprocess_query, context, 0);
+// 		context->current_query = prev_query;
+// 		return ret;
+// 	}
+// 	return expression_tree_walker(node, preprocess_query, context);
+// }
+
+
 static PlannedStmt *
 #if PG13_GE
 timescaledb_planner(Query *parse, const char *query_string, int cursor_opts,
@@ -398,6 +443,8 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 {
 	PlannedStmt *stmt;
 	ListCell *lc;
+	// List *rtes = NIL;
+	// ListCell *rte;
 	bool reset_fetcher_type = false;
 	bool reset_baserel_info = false;
 
@@ -434,6 +481,14 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 			 * Preprocess the hypertables in the query and warm up the caches.
 			 */
 			preprocess_query((Node *) parse, &context);
+
+			// get_query_id((Node *) parse, &context, rtes);
+			// foreach (rte, rtes)
+			// {
+			// 	printf("%s", (char*) lfirst(rte));
+			// 	// Node *n = lfirst(lc);
+			// }
+
 
 			/*
 			 * Determine which type of fetcher to use. If set by GUC, use what
@@ -1101,6 +1156,9 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 	if (ts_cm_functions->set_rel_pathlist != NULL)
 		ts_cm_functions->set_rel_pathlist(root, rel, rti, rte);
 
+	List *chunks = NIL;
+	ListCell *lchunk;
+
 	switch (reltype)
 	{
 		case TS_REL_HYPERTABLE_CHILD:
@@ -1115,6 +1173,7 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 					elog(ERROR, "out of budget");
 					return;
 				}
+				chunks = lappend(chunks, ch);
 			}
 
 
@@ -1144,6 +1203,13 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 			apply_optimizations(root, reltype, rel, rte, ht);
 			break;
 	}
+
+	// Reserve budget for query from all chunks
+	foreach (lchunk, chunks)
+	{
+		ts_chunk_reserve_privacy_budget(lfirst(lchunk), 0.5);
+	}
+
 }
 
 /* This hook is meant to editorialize about the information the planner gets

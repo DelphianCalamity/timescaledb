@@ -58,29 +58,42 @@
 void _executor_init(void);
 void _executor_fini(void);
 
-static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
+static ExecutorFinish_hook_type prev_ExecutorFinish = NULL;
 
 static void
-timescaledb_executor_end_hook(QueryDesc *queryDesc)
+timescaledb_executor_finish_hook(QueryDesc *queryDesc)
 {
     Assert(queryDesc != NULL);
 
     printf("lalala\n");
-    if (prev_ExecutorEnd)
-        prev_ExecutorEnd(queryDesc);
-    else
-        standard_ExecutorEnd(queryDesc);
+    if (prev_ExecutorFinish)
+        prev_ExecutorFinish(queryDesc);
+
+    uint64 queryId = queryDesc->plannedstmt->queryId;
+    // Todo: run only for DP queries; find a way to identify them
+    // This is a temporary hack to run only on my experimental query
+    if (queryId == -8203669194296371609) {
+        ListCell *lc;
+        RangeTblEntry *rte;
+        foreach (lc, queryDesc->plannedstmt->rtable)
+        {        
+            rte = lfirst_node(RangeTblEntry, lc);
+            Chunk *chunk = ts_chunk_get_by_relid(rte->relid, false);
+            if (chunk != NULL)
+                ts_chunk_allocate_privacy_budget(chunk, 0.5);
+
+        }
+    }
 }
 
 void _executor_init(void)
 {	
-    prev_ExecutorEnd = ExecutorEnd_hook;
-    ExecutorEnd_hook = timescaledb_executor_end_hook;
+    prev_ExecutorFinish = ExecutorFinish_hook;
+    ExecutorFinish_hook = timescaledb_executor_finish_hook;
 }
 
 void _executor_fini(void) 
 {
-    ExecutorEnd_hook = prev_ExecutorEnd;
-
+    ExecutorFinish_hook = prev_ExecutorFinish;
 }
 

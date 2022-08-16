@@ -79,6 +79,12 @@ TS_FUNCTION_INFO_V1(ts_chunk_status);
 
 static bool ts_chunk_add_status(Chunk *chunk, int32 status);
 
+static ScanTupleResult chunk_tuple_update_privacy_budget(TupleInfo *ti, void *data);
+
+static bool chunk_update_privacy_budget_internal(FormData_chunk *form);
+
+static bool chunk_update_privacy_budget(FormData_chunk *form);
+
 static const char *
 DatumGetNameString(Datum datum)
 {
@@ -3421,6 +3427,104 @@ chunk_update_status(FormData_chunk *form)
 	return success;
 }
 
+static ScanTupleResult
+chunk_tuple_update_privacy_budget(TupleInfo *ti, void *data)
+{
+	FormData_chunk form;
+	FormData_chunk *update = data;
+	CatalogSecurityContext sec_ctx;
+	HeapTuple new_tuple;
+
+	ts_chunk_formdata_fill(&form, ti);
+	form.initial_privacy_budget = update->initial_privacy_budget;
+	form.reserved_privacy_budget = update->reserved_privacy_budget;
+	form.available_privacy_budget = update->available_privacy_budget;
+	new_tuple = chunk_formdata_make_tuple(&form, ts_scanner_get_tupledesc(ti));
+
+	ts_catalog_database_info_become_owner(ts_catalog_database_info_get(), &sec_ctx);
+	ts_catalog_update_tid(ti->scanrel, ts_scanner_get_tuple_tid(ti), new_tuple);
+	ts_catalog_restore_user(&sec_ctx);
+	heap_freetuple(new_tuple);
+	return SCAN_DONE;
+}
+
+static bool
+chunk_update_privacy_budget_internal(FormData_chunk *form)
+{
+	ScanKeyData scankey[1];
+
+	ScanKeyInit(&scankey[0], Anum_chunk_idx_id, BTEqualStrategyNumber, F_INT4EQ, form->id);
+
+	return chunk_scan_internal(CHUNK_ID_INDEX,
+							   scankey,
+							   1,
+							   NULL,
+							   chunk_tuple_update_privacy_budget,
+							   form,
+							   0,
+							   ForwardScanDirection,
+							   RowExclusiveLock,
+							   CurrentMemoryContext) > 0;
+}
+
+static bool
+chunk_update_privacy_budget(FormData_chunk *form)
+{
+	int32 chunk_id = form->id;
+
+	float8 new_initial_budget = form->initial_privacy_budget;
+	float8 new_reserved_budget = form->reserved_privacy_budget;
+	float8 new_available_budget = form->available_privacy_budget;
+
+	bool success = true, dropped = false;
+	/* lock the chunk tuple for update. Block till we get exclusivetuplelock */
+	ScanTupLock scantuplock = {
+		.waitpolicy = LockWaitBlock,
+		.lockmode = LockTupleExclusive,
+	};
+	ScanIterator iterator = ts_scan_iterator_create(CHUNK, RowShareLock, CurrentMemoryContext);
+	iterator.ctx.index = catalog_get_index(ts_catalog_get(), CHUNK, CHUNK_ID_INDEX);
+	iterator.ctx.tuplock = &scantuplock;
+
+	/* see table_tuple_lock for details about flags that are set in TupleExclusive mode */
+	scantuplock.lockflags = TUPLE_LOCK_FLAG_LOCK_UPDATE_IN_PROGRESS;
+	if (!IsolationUsesXactSnapshot())
+	{
+		/* in read committed mode, we follow all updates to this tuple */
+		scantuplock.lockflags |= TUPLE_LOCK_FLAG_FIND_LAST_VERSION;
+	}
+
+	ts_scan_iterator_scan_key_init(&iterator,
+								   Anum_chunk_idx_id,
+								   BTEqualStrategyNumber,
+								   F_INT4EQ,
+								   Int32GetDatum(chunk_id));
+
+	ts_scanner_foreach(&iterator)
+	{
+		TupleInfo *ti = ts_scan_iterator_tuple_info(&iterator);
+		bool dropped_isnull, initial_privacy_budget_isnull, reserved_privacy_budget_isnull, available_privacy_budget_isnull;
+		dropped = DatumGetBool(slot_getattr(ti->slot, Anum_chunk_dropped, &dropped_isnull));
+		Assert(!dropped_isnull);
+		DatumGetFloat8(slot_getattr(ti->slot, Anum_chunk_initial_privacy_budget, &initial_privacy_budget_isnull));
+		Assert(!initial_privacy_budget_isnull);
+		DatumGetFloat8(slot_getattr(ti->slot, Anum_chunk_reserved_privacy_budget, &reserved_privacy_budget_isnull));
+		Assert(!reserved_privacy_budget_isnull);
+		DatumGetFloat8(slot_getattr(ti->slot, Anum_chunk_available_privacy_budget, &available_privacy_budget_isnull));
+		Assert(!available_privacy_budget_isnull);
+		if (!dropped)
+		{
+			success = chunk_update_privacy_budget_internal(form); // get RowExclusiveLock and update here
+		}
+	}
+	ts_scan_iterator_close(&iterator);
+	if (dropped)
+		ereport(ERROR,
+				(errcode(ERRCODE_INTERNAL_ERROR),
+				 errmsg("attempt to update privacy budget(%f-%f-%f) on dropped chunk %d", new_initial_budget, new_reserved_budget, new_available_budget, chunk_id)));
+	return success;
+}
+
 bool
 ts_chunk_set_name(Chunk *chunk, const char *newname)
 {
@@ -3476,6 +3580,33 @@ ts_chunk_add_status(Chunk *chunk, int32 status)
 	chunk->fd.status = mstatus;
 	return chunk_update_status(&chunk->fd);
 }
+
+bool
+ts_chunk_reserve_privacy_budget(Chunk *chunk, float8 val)
+{
+	// uint32 mstatus = ts_set_flags_32(chunk->fd.status, status);
+	chunk->fd.reserved_privacy_budget += val;
+	chunk->fd.available_privacy_budget -= val;
+	return chunk_update_privacy_budget(&chunk->fd);
+}
+
+bool
+ts_chunk_allocate_privacy_budget(Chunk *chunk, float8 val)
+{
+	// uint32 mstatus = ts_set_flags_32(chunk->fd.status, status);
+	chunk->fd.reserved_privacy_budget -= val;
+	return chunk_update_privacy_budget(&chunk->fd);
+}
+
+bool
+ts_chunk_release_reserved_privacy_budget(Chunk *chunk, float8 val)
+{
+	// uint32 mstatus = ts_set_flags_32(chunk->fd.status, status);
+	chunk->fd.reserved_privacy_budget -= val;
+	chunk->fd.available_privacy_budget += val;
+	return chunk_update_privacy_budget(&chunk->fd);
+}
+
 
 /*
  * Setting (INVALID_CHUNK_ID, true) is valid for an Access Node. It means

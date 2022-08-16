@@ -144,9 +144,16 @@ typedef struct DisplayKeyData
 	const char *(*as_string)(Datum);
 } DisplayKeyData;
 
- extern bool ts_chunk_is_budget_exhausted(const Chunk *chunk);
+extern bool ts_chunk_is_budget_exhausted(const Chunk *chunk);
 
-extern void ts_chunk_formdata_fill(FormData_chunk *fd, const TupleInfo *ti);
+extern TSDLLEXPORT bool ts_chunk_reserve_privacy_budget(Chunk *chunk, float8 val);
+
+extern TSDLLEXPORT bool ts_chunk_allocate_privacy_budget(Chunk *chunk, float8 val);
+
+extern TSDLLEXPORT bool ts_chunk_release_reserved_privacy_budget(Chunk *chunk, float8 val);
+
+extern TSDLLEXPORT void ts_chunk_formdata_fill(FormData_chunk *fd, const TupleInfo *ti);
+
 extern Chunk *ts_chunk_create_from_point(const Hypertable *ht, const Point *p, const char *schema,
 										 const char *prefix);
 
