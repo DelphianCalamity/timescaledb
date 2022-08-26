@@ -16,7 +16,6 @@ typedef struct PrivacyBudget
 
 void ts_privacy_budget_init(PrivacyBudget *privacy_budget);
 bool ts_privacy_budget_is_exhausted(const PrivacyBudget *privacy_budget);
-void ts_privacy_budget_consume(PrivacyBudget *privacy_budget, float8 val);
 PrivacyBudget* ts_copy_privacy_budget(PrivacyBudget *privacy_budget);
 
 

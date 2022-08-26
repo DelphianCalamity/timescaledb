@@ -44,7 +44,7 @@
 #include "extension.h"
 #include "func_cache.h"
 #include "guc.h"
-#include "hypertable_cache.h"
+#include "dp_optimization_results_cache.h"
 #include "import/allpaths.h"
 #include "license_guc.h"
 #include "nodes/chunk_append/chunk_append.h"
@@ -68,19 +68,38 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
     if (prev_ExecutorFinish)
         prev_ExecutorFinish(queryDesc);
 
-    uint64 queryId = queryDesc->plannedstmt->queryId;
+    Cache *dp_results_cache = ts_dp_optimization_results_cache_pin();
+	uint64 queryId = queryDesc->plannedstmt->queryId;
+    
     // Todo: run only for DP queries; find a way to identify them
     // This is a temporary hack to run only on my experimental query
     if (queryId == -8203669194296371609) {
         ListCell *lc;
         RangeTblEntry *rte;
+    	List *chunks = NIL;
+
+
         foreach (lc, queryDesc->plannedstmt->rtable)
         {        
             rte = lfirst_node(RangeTblEntry, lc);
             Chunk *chunk = ts_chunk_get_by_relid(rte->relid, false);
             if (chunk != NULL)
+            {
                 ts_chunk_allocate_privacy_budget(chunk, 0.5);
+                chunks = lappend(chunks, chunk);
+            }
+        }
 
+        // Get blocks range
+        Chunk *first_chunk = list_nth(chunks, 0);
+        Chunk *last_chunk = list_nth(chunks, chunks->length-1);
+        Blocks blocks;
+        blocks.chunk_id_start = first_chunk->fd.id;
+        blocks.chunk_id_end = last_chunk->fd.id;
+        void *dp_result = ts_dp_optimization_results_cache_get_entry(dp_results_cache, queryId, blocks, CACHE_FLAG_MISSING_OK);
+        if (dp_result)
+        {
+            printf("found result");
         }
     }
 }
