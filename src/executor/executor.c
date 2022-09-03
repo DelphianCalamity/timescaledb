@@ -60,25 +60,31 @@ void _executor_fini(void);
 
 static ExecutorFinish_hook_type prev_ExecutorFinish = NULL;
 
+// Allocates budget from chunks and inserts the result in the dp optimization results cache/distances
 static void
 timescaledb_executor_finish_hook(QueryDesc *queryDesc)
 {
     Assert(queryDesc != NULL);
 
-    if (prev_ExecutorFinish)
+    if (prev_ExecutorFinish) {
         prev_ExecutorFinish(queryDesc);
+    }
 
-    Cache *dp_results_cache = ts_dp_optimization_results_cache_pin();
 	uint64 queryId = queryDesc->plannedstmt->queryId;
     
     // Todo: run only for DP queries; find a way to identify them
     // This is a temporary hack to run only on my experimental query
-    if (queryId == -8203669194296371609) {
+    if (queryId == 251304559932419399) {
+    
+        bool found;
+        Blocks blocks;
         ListCell *lc;
         RangeTblEntry *rte;
     	List *chunks = NIL;
 
+        // Cache *dp_results_cache = ts_dp_optimization_results_cache_pin();
 
+        // For all chunks involved consume the reserved budget
         foreach (lc, queryDesc->plannedstmt->rtable)
         {        
             rte = lfirst_node(RangeTblEntry, lc);
@@ -90,17 +96,23 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
             }
         }
 
-        // Get blocks range
+        // Get blocks range to serve as a key in the caches e.g. (1,10)
         Chunk *first_chunk = list_nth(chunks, 0);
         Chunk *last_chunk = list_nth(chunks, chunks->length-1);
-        Blocks blocks;
         blocks.chunk_id_start = first_chunk->fd.id;
         blocks.chunk_id_end = last_chunk->fd.id;
-        void *dp_result = ts_dp_optimization_results_cache_get_entry(dp_results_cache, queryId, blocks, CACHE_FLAG_MISSING_OK);
-        if (dp_result)
-        {
-            printf("found result");
+        
+        ts_dp_optimization_results_cache_get_entry(queryId, blocks, &found);
+        if (!found)
+        {   // If not already in dp optimization results cache add it
+            // ts_dp_optimization_results_cache_write_entry(dp_results_cache, queryId, blocks, queryDesc->result, &found);
+            ts_dp_optimization_results_cache_write_entry(queryId, blocks, queryDesc->result, &found);
+
         }
+        
+        ts_dp_optimization_results_cache_get_entry(queryId, blocks, &found);
+
+        // ts_cache_release(dp_results_cache);
     }
 }
 

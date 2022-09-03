@@ -13,56 +13,55 @@
 #include "dp_optimization_results_cache.h"
 #include "ts_catalog/catalog.h"
 #include "cache.h"
-#include "scanner.h"
 #include "dimension.h"
-#include "ts_catalog/tablespace.h"
-// #include <string.h>
-// #include <stdlib.h>
 
 #define KEY_SIZE 200
-static void *dp_optimization_results_cache_create_entry(Cache *cache, CacheQuery *query);
-static void dp_optimization_results_cache_missing_error(const Cache *cache, const CacheQuery *query);
 
-
-typedef struct DpOptimizationResultsCacheQuery
-{
-	CacheQuery q;
-	int64 queryId;
-	Blocks blocks;
-	char key[KEY_SIZE];
-} DpOptimizationResultsCacheQuery;
+static Cache *dp_optimization_results_cache_current = NULL;
 
 static void *
 dp_optimization_results_cache_get_key(CacheQuery *query)
 {
-	return &((DpOptimizationResultsCacheQuery *) query)->key;
+	return (char *) query->data;
 }
 
 typedef struct
-{
-	void *result;
+{	
+	// int64 queryId;
+	char key[KEY_SIZE];
+	float result;
 } DpOptimizationResultsCacheEntry;
 
+
+static void *
+dp_optimization_results_cache_create_entry(Cache *cache, CacheQuery *query)
+{
+	DpOptimizationResultsCacheEntry *entry = query->result;
+	entry->result = ((DpOptimizationResultsCacheEntry *)query->data)->result;
+	return entry;
+}
+
 static bool
-dp_optimization_results_cache_valid_result(const void *result)
+ts_dp_optimization_results_cache_valid_result(const void *result)
 {
 	if (result == NULL)
 		return false;
-	return ((DpOptimizationResultsCacheEntry *) result)->result != NULL;
+	return ((DpOptimizationResultsCacheEntry *) result) != NULL;
 }
 
 static Cache *
-dp_optimization_results_cache_create()
+dp_optimization_results_cache_create(void)
 {
 	MemoryContext ctx =
 		AllocSetContextCreate(CacheMemoryContext, "dp_optimization_results cache", ALLOCSET_DEFAULT_SIZES);
 
 	Cache *cache = MemoryContextAlloc(ctx, sizeof(Cache));
-	Cache		template =
+
+	*cache = (Cache)
 	{
 		.hctl =
 		{
-			.keysize = KEY_SIZE,
+			.keysize = sizeof(char)*KEY_SIZE, //, //sizeof(int64),
 			.entrysize = sizeof(DpOptimizationResultsCacheEntry),
 			.hcxt = ctx,
 		},
@@ -71,32 +70,15 @@ dp_optimization_results_cache_create()
 		.flags = HASH_ELEM | HASH_CONTEXT | HASH_BLOBS,
 		.get_key = dp_optimization_results_cache_get_key,
 		.create_entry = dp_optimization_results_cache_create_entry,
-		.missing_error = dp_optimization_results_cache_missing_error,
-		.valid_result = dp_optimization_results_cache_valid_result,
+		.missing_error = NULL,
+		.valid_result = ts_dp_optimization_results_cache_valid_result,
 	};
 
-	*cache = template;
-
 	ts_cache_init(cache);
+	cache->handle_txn_callbacks = false;
 
 	return cache;
 }
-
-static Cache *dp_optimization_results_cache_current = NULL;
-
-
-static void *
-dp_optimization_results_cache_create_entry(Cache *cache, CacheQuery *query)
-{
-	DpOptimizationResultsCacheEntry *cache_entry = query->result;
-	return cache_entry->result == NULL ? NULL : cache_entry;
-}
-
-static void
-dp_optimization_results_cache_missing_error(const Cache *cache, const CacheQuery *query)
-{
-}
-
 
 void
 ts_dp_optimization_results_cache_invalidate_callback(void)
@@ -105,22 +87,58 @@ ts_dp_optimization_results_cache_invalidate_callback(void)
 	dp_optimization_results_cache_current = dp_optimization_results_cache_create();
 }
 
-/* Get dp optimization results cache entry. If the entry is not in the cache, add it. */
+/* Get dp optimization results cache entry. */
 void *
-ts_dp_optimization_results_cache_get_entry(Cache *const cache, const int64 queryid, const Blocks blocks, const unsigned int flags)
+ts_dp_optimization_results_cache_get_entry(int64 queryid, const Blocks blocks, bool *found)
 {
-	DpOptimizationResultsCacheQuery query = {
-		.q.flags = flags,
-		.queryId = queryid,
-		.blocks = blocks,
-	};
-	sprintf(query.key, "%ld", queryid);
-	sprintf(query.key+strlen(query.key), "%d", blocks.chunk_id_start);
-	sprintf(query.key+strlen(query.key), "%d", blocks.chunk_id_end);
+	*found = false;
+	const unsigned int flags = CACHE_FLAG_MISSING_OK | CACHE_FLAG_NOCREATE;
 
-	DpOptimizationResultsCacheEntry *entry = ts_cache_fetch(cache, &query.q);
-	Assert((flags & CACHE_FLAG_MISSING_OK) ? true : (entry != NULL && entry->result != NULL));
-	return entry == NULL ? NULL : entry->result;
+	char key[KEY_SIZE];
+	int i=0; 
+	for (i=0; i<KEY_SIZE; i++) {
+		key[i] = '\0';
+	}
+	sprintf(key, "%ld", queryid);
+	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
+	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
+
+	CacheQuery query = {
+		.flags = flags,
+		.data = key,
+
+	};
+
+	DpOptimizationResultsCacheEntry *entry = ts_cache_fetch(dp_optimization_results_cache_current, &query);
+	if (entry != NULL)
+		*found = true;
+	return entry;
+}
+
+/* Get dp optimization results cache write entry. */
+void
+ts_dp_optimization_results_cache_write_entry(int64 queryid, const Blocks blocks, float result, bool *found)
+{
+	*found = false;
+	const unsigned int flags = CACHE_FLAG_MISSING_OK;
+
+	char *key = palloc(KEY_SIZE*sizeof(char));
+	int i=0; 
+	for (i=0; i<KEY_SIZE; i++) {
+		key[i] = '\0';
+	}
+	sprintf(key, "%ld", queryid);
+	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
+	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
+
+	CacheQuery query = {
+		.flags = flags,
+		.data = key,
+
+	};
+	DpOptimizationResultsCacheEntry *entry = ts_cache_fetch(dp_optimization_results_cache_current, &query);
+	if (entry != NULL)
+		*found = true;
 }
 
 extern TSDLLEXPORT Cache *
@@ -132,7 +150,7 @@ ts_dp_optimization_results_cache_pin()
 void
 _dp_optimization_results_cache_init(void)
 {
-	CreateCacheMemoryContext();
+	// CreateCacheMemoryContext();
 	dp_optimization_results_cache_current = dp_optimization_results_cache_create();
 }
 
@@ -140,18 +158,5 @@ void
 _dp_optimization_results_cache_fini(void)
 {
 	ts_cache_invalidate(dp_optimization_results_cache_current);
+	dp_optimization_results_cache_current = NULL;
 }
-
-
-
-
-// typedef struct DpOptimizationDistancesCacheQuery
-// {
-// 	CacheQuery q;
-// 	int64 queryId;
-// 	Blocks blocks_1;
-// 	Blocks blocks_2;
-// 	// Oid relid;
-// 	const char *schema;
-// 	const char *table;
-// } DpOptimizationDistancesCacheQuery;

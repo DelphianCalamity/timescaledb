@@ -10,7 +10,6 @@
 
 #include "export.h"
 #include "cache.h"
-#include "hypertable.h"
 #include "export.h"
 
 typedef struct blocks
@@ -20,8 +19,10 @@ typedef struct blocks
 } Blocks;
 
 
-extern TSDLLEXPORT void *ts_dp_optimization_results_cache_get_entry(Cache *const cache,  const int64 queryid, const Blocks blocks,
-															 const unsigned int flags);
+extern TSDLLEXPORT void *
+	ts_dp_optimization_results_cache_get_entry(const int64 queryid, const Blocks blocks, bool *found);
+extern TSDLLEXPORT void
+	ts_dp_optimization_results_cache_write_entry(const int64 queryid, const Blocks blocks, float result, bool *found);
 
 extern void ts_dp_optimization_results_cache_invalidate_callback(void);
 
