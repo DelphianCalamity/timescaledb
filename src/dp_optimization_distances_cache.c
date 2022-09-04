@@ -11,7 +11,7 @@
 
 #include "errors.h"
 #include "dp_optimization_caches.h"
-#include "dp_optimization_results_cache.h"
+#include "dp_optimization_distances_cache.h"
 #include "ts_catalog/catalog.h"
 #include "cache.h"
 #include "dimension.h"
@@ -21,7 +21,7 @@ extern Cache* dp_optimization_distances_caches_current[NUM_QUERIES];
 extern CachesMap caches_map;
 
 static void *
-dp_optimization_results_cache_get_key(CacheQuery *query)
+dp_optimization_distances_cache_get_key(CacheQuery *query)
 {
 	return (char *) query->data;
 }
@@ -30,31 +30,31 @@ typedef struct
 {	
 	// int64 queryId;
 	char key[KEY_SIZE];
-	float result;
-} DpOptimizationResultsCacheEntry;
+	float distance;
+} DpOptimizationDistancesCacheEntry;
 
 
 static void *
-dp_optimization_results_cache_create_entry(Cache *cache, CacheQuery *query)
+dp_optimization_distances_cache_create_entry(Cache *cache, CacheQuery *query)
 {
-	DpOptimizationResultsCacheEntry *entry = query->result;
-	entry->result = ((DpOptimizationResultsCacheEntry *)query->data)->result;
+	DpOptimizationDistancesCacheEntry *entry = query->result;
+	entry->distance = ((DpOptimizationDistancesCacheEntry *)query->data)->distance;
 	return entry;
 }
 
 static bool
-ts_dp_optimization_results_cache_valid_result(const void *result)
+ts_dp_optimization_distances_cache_valid_result(const void *result)
 {
 	if (result == NULL)
 		return false;
-	return ((DpOptimizationResultsCacheEntry *) result) != NULL;
+	return ((DpOptimizationDistancesCacheEntry *) result) != NULL;
 }
 
 Cache *
-dp_optimization_results_cache_create(void)
+dp_optimization_distances_cache_create(void)
 {
 	MemoryContext ctx =
-		AllocSetContextCreate(CacheMemoryContext, "dp_optimization_results cache", ALLOCSET_DEFAULT_SIZES);
+		AllocSetContextCreate(CacheMemoryContext, "dp_optimization_distances cache", ALLOCSET_DEFAULT_SIZES);
 
 	Cache *cache = MemoryContextAlloc(ctx, sizeof(Cache));
 
@@ -62,17 +62,17 @@ dp_optimization_results_cache_create(void)
 	{
 		.hctl =
 		{
-			.keysize = sizeof(char)*KEY_SIZE, //, //sizeof(int64),
-			.entrysize = sizeof(DpOptimizationResultsCacheEntry),
+			.keysize = sizeof(char)*KEY_SIZE,
+			.entrysize = sizeof(DpOptimizationDistancesCacheEntry),
 			.hcxt = ctx,
 		},
-		.name = "dp_optimization_results_cache",
+		.name = "dp_optimization_distances_cache",
 		.numelements = 16,
 		.flags = HASH_ELEM | HASH_CONTEXT | HASH_BLOBS,
-		.get_key = dp_optimization_results_cache_get_key,
-		.create_entry = dp_optimization_results_cache_create_entry,
+		.get_key = dp_optimization_distances_cache_get_key,
+		.create_entry = dp_optimization_distances_cache_create_entry,
 		.missing_error = NULL,
-		.valid_result = ts_dp_optimization_results_cache_valid_result,
+		.valid_result = ts_dp_optimization_distances_cache_valid_result,
 	};
 
 	ts_cache_init(cache);
@@ -82,15 +82,15 @@ dp_optimization_results_cache_create(void)
 }
 
 void
-ts_dp_optimization_results_cache_invalidate_callback(Cache **cache)
+ts_dp_optimization_distances_cache_invalidate_callback(Cache **cache)
 {
 	ts_cache_invalidate(*cache);
-	*cache = dp_optimization_results_cache_create();
+	*cache = dp_optimization_distances_cache_create();
 }
 
 /* Get dp optimization results cache entry. */
 void *
-ts_dp_optimization_results_cache_get_entry(Cache *cache, int64 queryid, const Blocks blocks, bool *found)
+ts_dp_optimization_distances_cache_get_entry(Cache *cache, int64 queryid, const Blocks blocks, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK | CACHE_FLAG_NOCREATE;
@@ -109,15 +109,20 @@ ts_dp_optimization_results_cache_get_entry(Cache *cache, int64 queryid, const Bl
 
 	};
 
-	DpOptimizationResultsCacheEntry *entry = ts_cache_fetch(cache, &query);
+	DpOptimizationDistancesCacheEntry *entry = ts_cache_fetch(cache, &query);
 	if (entry != NULL)
 		*found = true;
 	return entry;
 }
 
+void
+ts_dp_optimization_distances_cache_write(Cache *cache, int64 queryid, const Blocks blocks, float result)
+{
+}
+
 /* Get dp optimization results cache write entry. */
 void
-ts_dp_optimization_results_cache_write_entry(Cache *cache, int64 queryid, const Blocks blocks, float result, bool *found)
+ts_dp_optimization_distances_cache_write_entry(Cache *cache, int64 queryid, const Blocks blocks, float result, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK;
@@ -135,13 +140,13 @@ ts_dp_optimization_results_cache_write_entry(Cache *cache, int64 queryid, const 
 		.data = key,
 
 	};
-	DpOptimizationResultsCacheEntry *entry = ts_cache_fetch(cache, &query);
+	DpOptimizationDistancesCacheEntry *entry = ts_cache_fetch(cache, &query);
 	if (entry != NULL)
 		*found = true;
 }
 
 Cache*
-dp_optimization_results_cache_get(int i)
+dp_optimization_distances_cache_get(int i)
 {
-	return dp_optimization_results_caches_current[i];
+	return dp_optimization_distances_caches_current[i];
 }

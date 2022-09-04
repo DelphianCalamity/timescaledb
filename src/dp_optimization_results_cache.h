@@ -7,28 +7,17 @@
 #define TIMESCALEDB_DP_OPTIMIZATION_RESULTS_CACHE_H
 
 #include <postgres.h>
+#include "dp_optimization_caches.h"
 
-#include "export.h"
-#include "cache.h"
-#include "export.h"
-
-typedef struct blocks
-{
-	int chunk_id_start;
-	int chunk_id_end;
-} Blocks;
-
+Cache* dp_optimization_results_cache_create(void);
 
 extern TSDLLEXPORT void *
-	ts_dp_optimization_results_cache_get_entry(const int64 queryid, const Blocks blocks, bool *found);
+	ts_dp_optimization_results_cache_get_entry(Cache *cache, const int64 queryid, const Blocks blocks, bool *found);
 extern TSDLLEXPORT void
-	ts_dp_optimization_results_cache_write_entry(const int64 queryid, const Blocks blocks, float result, bool *found);
+	ts_dp_optimization_results_cache_write_entry(Cache *cache, const int64 queryid, const Blocks blocks, float result, bool *found);
 
-extern void ts_dp_optimization_results_cache_invalidate_callback(void);
+extern void ts_dp_optimization_results_cache_invalidate_callback(Cache **cache);
 
-extern TSDLLEXPORT Cache *ts_dp_optimization_results_cache_pin(void);
-
-extern void _dp_optimization_results_cache_init(void);
-extern void _dp_optimization_results_cache_fini(void);
+extern TSDLLEXPORT Cache* dp_optimization_results_cache_get(int i);
 
 #endif /* TIMESCALEDB_DP_OPTIMIZATION_RESULTS_CACHE_H */

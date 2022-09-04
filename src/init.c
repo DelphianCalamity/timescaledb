@@ -30,8 +30,8 @@ PG_MODULE_MAGIC;
 extern void _hypertable_cache_init(void);
 extern void _hypertable_cache_fini(void);
 
-extern void _dp_optimization_results_cache_init(void);
-extern void _dp_optimization_results_cache_fini(void);
+extern void _dp_optimization_caches_init(void);
+extern void _dp_optimization_caches_fini(void);
 
 extern void _cache_invalidate_init(void);
 extern void _cache_invalidate_fini(void);
@@ -91,7 +91,7 @@ cleanup_on_pg_proc_exit(int code, Datum arg)
 	_planner_fini();
 	_cache_invalidate_fini();
 	_hypertable_cache_fini();
-	_dp_optimization_results_cache_fini();
+	_dp_optimization_caches_fini();
 	_cache_fini();
 }
 
@@ -108,7 +108,7 @@ _PG_init(void)
 
 	_cache_init();
 	_hypertable_cache_init();
-	_dp_optimization_results_cache_init();
+	_dp_optimization_caches_init();
 	_cache_invalidate_init();
 	_planner_init();
 	_executor_init();

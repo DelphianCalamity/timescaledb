@@ -45,6 +45,9 @@
 #include "func_cache.h"
 #include "guc.h"
 #include "dp_optimization_results_cache.h"
+#include "dp_optimization_distances_cache.h"
+#include "dp_optimization_caches.h"
+
 #include "import/allpaths.h"
 #include "license_guc.h"
 #include "nodes/chunk_append/chunk_append.h"
@@ -81,9 +84,8 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
         ListCell *lc;
         RangeTblEntry *rte;
     	List *chunks = NIL;
-
-        // Cache *dp_results_cache = ts_dp_optimization_results_cache_pin();
-
+        DPOptimizationCaches dp_optimization_caches = _dp_optimization_caches_add_get(queryId);
+        
         // For all chunks involved consume the reserved budget
         foreach (lc, queryDesc->plannedstmt->rtable)
         {        
@@ -102,17 +104,12 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
         blocks.chunk_id_start = first_chunk->fd.id;
         blocks.chunk_id_end = last_chunk->fd.id;
         
-        ts_dp_optimization_results_cache_get_entry(queryId, blocks, &found);
+        ts_dp_optimization_results_cache_get_entry(dp_optimization_caches.dp_optimization_results_cache, queryId, blocks, &found);
         if (!found)
         {   // If not already in dp optimization results cache add it
-            // ts_dp_optimization_results_cache_write_entry(dp_results_cache, queryId, blocks, queryDesc->result, &found);
-            ts_dp_optimization_results_cache_write_entry(queryId, blocks, queryDesc->result, &found);
-
-        }
-        
-        ts_dp_optimization_results_cache_get_entry(queryId, blocks, &found);
-
-        // ts_cache_release(dp_results_cache);
+            ts_dp_optimization_results_cache_write_entry(dp_optimization_caches.dp_optimization_results_cache, queryId, blocks, queryDesc->result, &found);
+            ts_dp_optimization_distances_cache_write(dp_optimization_caches.dp_optimization_results_cache, queryId, blocks, queryDesc->result);
+        }  
     }
 }
 
