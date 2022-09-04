@@ -104,11 +104,11 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
         blocks.chunk_id_start = first_chunk->fd.id;
         blocks.chunk_id_end = last_chunk->fd.id;
         
-        ts_dp_optimization_results_cache_get_entry(dp_optimization_caches.dp_optimization_results_cache, queryId, blocks, &found);
+        ts_dp_optimization_results_cache_get_entry(dp_optimization_caches.dp_optimization_results_cache, blocks, &found);
         if (!found)
         {   // If not already in dp optimization results cache add it
-            ts_dp_optimization_results_cache_write_entry(dp_optimization_caches.dp_optimization_results_cache, queryId, blocks, queryDesc->result, &found);
-            ts_dp_optimization_distances_cache_write(dp_optimization_caches.dp_optimization_results_cache, queryId, blocks, queryDesc->result);
+            ts_dp_optimization_results_cache_write_entry(dp_optimization_caches.dp_optimization_results_cache, blocks, queryDesc->result, &found);
+            ts_dp_optimization_distances_cache_write(dp_optimization_caches.dp_optimization_results_cache, blocks, queryDesc->result);
         }  
     }
 }

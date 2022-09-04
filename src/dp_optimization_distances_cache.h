@@ -13,13 +13,13 @@ Cache *
 dp_optimization_distances_cache_create(void);
 
 extern TSDLLEXPORT void *
-	ts_dp_optimization_distances_cache_get_entry(Cache *cache, const int64 queryid, const Blocks blocks, bool *found);
+	ts_dp_optimization_distances_cache_get_entry(Cache *cache, const Blocks blocks, bool *found);
 
 extern TSDLLEXPORT void
-	ts_dp_optimization_distances_cache_write(Cache *cache, const int64 queryid, const Blocks blocks, float result);
+	ts_dp_optimization_distances_cache_write(Cache *cache, const Blocks blocks, float result);
 
 extern TSDLLEXPORT void
-	ts_dp_optimization_distances_cache_write_entry(Cache *cache, const int64 queryid, const Blocks blocks, float result, bool *found);
+	ts_dp_optimization_distances_cache_write_entry(Cache *cache, const Blocks blocks, float result, bool *found);
 
 extern void ts_dp_optimization_distances_cache_invalidate_callback(Cache **cache);
 

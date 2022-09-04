@@ -90,7 +90,7 @@ ts_dp_optimization_results_cache_invalidate_callback(Cache **cache)
 
 /* Get dp optimization results cache entry. */
 void *
-ts_dp_optimization_results_cache_get_entry(Cache *cache, int64 queryid, const Blocks blocks, bool *found)
+ts_dp_optimization_results_cache_get_entry(Cache *cache, const Blocks blocks, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK | CACHE_FLAG_NOCREATE;
@@ -99,7 +99,7 @@ ts_dp_optimization_results_cache_get_entry(Cache *cache, int64 queryid, const Bl
 	for (int i=0; i<KEY_SIZE; i++) {
 		key[i] = '\0';
 	}
-	sprintf(key, "%ld", queryid);
+	// sprintf(key, "%ld", queryid);
 	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
 	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
 
@@ -117,7 +117,7 @@ ts_dp_optimization_results_cache_get_entry(Cache *cache, int64 queryid, const Bl
 
 /* Get dp optimization results cache write entry. */
 void
-ts_dp_optimization_results_cache_write_entry(Cache *cache, int64 queryid, const Blocks blocks, float result, bool *found)
+ts_dp_optimization_results_cache_write_entry(Cache *cache, const Blocks blocks, float result, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK;
@@ -126,7 +126,7 @@ ts_dp_optimization_results_cache_write_entry(Cache *cache, int64 queryid, const 
 	for (int i=0; i<KEY_SIZE; i++) {
 		key[i] = '\0';
 	}
-	sprintf(key, "%ld", queryid);
+	// sprintf(key, "%ld", queryid);
 	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
 	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
 
