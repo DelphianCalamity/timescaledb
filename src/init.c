@@ -91,6 +91,7 @@ cleanup_on_pg_proc_exit(int code, Datum arg)
 	_planner_fini();
 	_cache_invalidate_fini();
 	_hypertable_cache_fini();
+	_executor_fini();
 	_dp_optimization_caches_fini();
 	_cache_fini();
 }

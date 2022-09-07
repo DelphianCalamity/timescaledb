@@ -11,14 +11,19 @@
 
 #include "errors.h"
 #include "dp_optimization_caches.h"
+#include "dp_optimization_results_cache.h"
 #include "dp_optimization_distances_cache.h"
+
 #include "ts_catalog/catalog.h"
 #include "cache.h"
 #include "dimension.h"
 
+#define ABS(N) ((N<0)?(-N):(N))
+
 extern Cache* dp_optimization_results_caches_current[NUM_QUERIES];
 extern Cache* dp_optimization_distances_caches_current[NUM_QUERIES];
 extern CachesMap caches_map;
+extern CachesKeys caches_keys;
 
 static void *
 dp_optimization_distances_cache_get_key(CacheQuery *query)
@@ -27,18 +32,23 @@ dp_optimization_distances_cache_get_key(CacheQuery *query)
 }
 
 typedef struct
-{	
-	// int64 queryId;
-	char key[KEY_SIZE];
+{
+	char *key;
 	float distance;
-} DpOptimizationDistancesCacheEntry;
+} DpOptimizationDistancesCacheListEntry;
 
+typedef struct
+{
+	char key[KEY_SIZE];		// temp hack
+	List *entries;
+
+} DpOptimizationDistancesCacheList;
 
 static void *
 dp_optimization_distances_cache_create_entry(Cache *cache, CacheQuery *query)
 {
-	DpOptimizationDistancesCacheEntry *entry = query->result;
-	entry->distance = ((DpOptimizationDistancesCacheEntry *)query->data)->distance;
+	DpOptimizationDistancesCacheList *entry = query->result;
+	entry->entries = NIL;
 	return entry;
 }
 
@@ -47,7 +57,7 @@ ts_dp_optimization_distances_cache_valid_result(const void *result)
 {
 	if (result == NULL)
 		return false;
-	return ((DpOptimizationDistancesCacheEntry *) result) != NULL;
+	return ((DpOptimizationDistancesCacheList *) result) != NULL;
 }
 
 Cache *
@@ -63,7 +73,7 @@ dp_optimization_distances_cache_create(void)
 		.hctl =
 		{
 			.keysize = sizeof(char)*KEY_SIZE,
-			.entrysize = sizeof(DpOptimizationDistancesCacheEntry),
+			.entrysize = sizeof(DpOptimizationDistancesCacheList),
 			.hcxt = ctx,
 		},
 		.name = "dp_optimization_distances_cache",
@@ -88,61 +98,90 @@ ts_dp_optimization_distances_cache_invalidate_callback(Cache **cache)
 	*cache = dp_optimization_distances_cache_create();
 }
 
+
 /* Get dp optimization results cache entry. */
-void *
-ts_dp_optimization_distances_cache_get_entry(Cache *cache, const Blocks blocks, bool *found)
+List *
+ts_dp_optimization_distances_cache_get_entry(Cache *cache,  char *key, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK | CACHE_FLAG_NOCREATE;
 
-	char key[KEY_SIZE];
-	for (int i=0; i<KEY_SIZE; i++) {
-		key[i] = '\0';
-	}
-	// sprintf(key, "%ld", queryid);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
-
 	CacheQuery query = {
 		.flags = flags,
 		.data = key,
 
 	};
 
-	DpOptimizationDistancesCacheEntry *entry = ts_cache_fetch(cache, &query);
+	DpOptimizationDistancesCacheList *entry = ts_cache_fetch(cache, &query);
 	if (entry != NULL)
+	{
 		*found = true;
-	return entry;
+		return entry->entries;
+	}
+	return 0;
 }
 
 void
-ts_dp_optimization_distances_cache_write(Cache *cache, const Blocks blocks, float result)
+ts_dp_optimization_distances_cache_write(Cache *distances_cache, Cache *results_cache, char *curr_key, float curr_result)
 {
+	char *key;
+	List *entries;
+	bool found;
+	float distance, result;
+	DpOptimizationDistancesCacheListEntry *entry;
+
+	for (int i=0; i<caches_keys.counter; i++)
+	{
+		key = caches_keys.entries[i];
+		if (curr_key == key)
+			continue;
+
+		result = ts_dp_optimization_results_cache_get_entry(results_cache, key, &found);
+        if (!found) 
+			elog(ERROR, "key not found");
+
+		// Calculate distance
+		distance = ABS(curr_result-result);
+		
+		// 1) Insert <curr_key : (key,distance)> in cache 
+		entries = ts_dp_optimization_distances_cache_get_entry(distances_cache, curr_key, &found);
+		if (!found) 
+			entries = ts_dp_optimization_distances_cache_write_entry(distances_cache, curr_key, &found);
+		// Create list entry and append to the list
+		entry = malloc(sizeof(DpOptimizationDistancesCacheListEntry));
+		entry->key = key;
+		entry->distance = distance;
+		entries = lappend(entries, entry);
+
+		// 2) Insert <key : (curr_key,distance)> in cache 
+		entries = ts_dp_optimization_distances_cache_get_entry(distances_cache, key, &found);
+		if (!found) 
+			entries = ts_dp_optimization_distances_cache_write_entry(distances_cache, key, &found);
+		// Create list entry and append to the list
+		entry = malloc(sizeof(DpOptimizationDistancesCacheListEntry));
+		entry->key = curr_key;
+		entry->distance = distance;
+		entries = lappend(entries, entry);
+	}
 }
 
 /* Get dp optimization results cache write entry. */
-void
-ts_dp_optimization_distances_cache_write_entry(Cache *cache, const Blocks blocks, float result, bool *found)
+List *
+ts_dp_optimization_distances_cache_write_entry(Cache *cache, char* key, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK;
 
-	char *key = palloc(KEY_SIZE*sizeof(char));
-	for (int i=0; i<KEY_SIZE; i++) {
-		key[i] = '\0';
-	}
-	// sprintf(key, "%ld", queryid);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
-
 	CacheQuery query = {
 		.flags = flags,
 		.data = key,
-
 	};
-	DpOptimizationDistancesCacheEntry *entry = ts_cache_fetch(cache, &query);
-	if (entry != NULL)
+	DpOptimizationDistancesCacheList *entry = ts_cache_fetch(cache, &query);
+	if (entry != NULL) {
 		*found = true;
+		return entry->entries;
+	}
+	return NULL;
 }
 
 Cache*

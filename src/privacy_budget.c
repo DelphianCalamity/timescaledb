@@ -14,6 +14,13 @@ bool ts_privacy_budget_is_exhausted(const PrivacyBudget *privacy_budget) {
     return true;
 }
 
+bool ts_privacy_budget_is_enough(const PrivacyBudget *privacy_budget, float8 val) {
+    if (privacy_budget->available_budget < val) {
+        return false;
+    }
+    return true;
+}
+
 PrivacyBudget* ts_copy_privacy_budget(PrivacyBudget *privacy_budget) {
     PrivacyBudget * pb = palloc(sizeof(PrivacyBudget));
     pb->initial_budget = privacy_budget->initial_budget;

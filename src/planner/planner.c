@@ -59,7 +59,9 @@
 #include "partitioning.h"
 #include "planner/planner.h"
 #include "utils.h"
-
+#include "dp_optimization_results_cache.h"
+#include "dp_optimization_distances_cache.h"
+#include "dp_optimization_caches.h"
 #include "compat/compat.h"
 #if PG13_GE
 #include <common/hashfn.h>
@@ -398,8 +400,6 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 {
 	PlannedStmt *stmt;
 	ListCell *lc;
-	// List *rtes = NIL;
-	// ListCell *rte;
 	bool reset_fetcher_type = false;
 	bool reset_baserel_info = false;
 
@@ -562,6 +562,58 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 
 	planner_hcache_pop(true);
 
+
+	uint64 queryId = stmt->queryId;
+    
+    // Todo: run only for DP queries; find a way to identify them
+    // This is a temporary hack to run only on my experimental query
+    if (queryId == -364273820602274323) {
+    
+        bool found;
+        Blocks blocks;
+        ListCell *lc;
+        RangeTblEntry *rte;
+    	List *chunks = NIL;
+        DPOptimizationCaches dp_optimization_caches = dp_optimization_caches_add_get(queryId);
+        
+        // For all chunks involved see if they have available budget
+		bool is_budget_exhausted = false;
+        foreach (lc, stmt->rtable)
+        {        
+            rte = lfirst_node(RangeTblEntry, lc);
+            Chunk *chunk = ts_chunk_get_by_relid(rte->relid, false);
+            if (chunk != NULL)
+            {
+				if (!ts_chunk_has_enough_budget(chunk, 0.5)) {
+					is_budget_exhausted = true;
+				}
+                chunks = lappend(chunks, chunk);
+            }
+        }
+
+        // Get blocks range to serve as a key in the caches e.g. (1,10)
+        Chunk *first_chunk = list_nth(chunks, 0);
+        Chunk *last_chunk = list_nth(chunks, chunks->length-1);
+        blocks.chunk_id_start = first_chunk->fd.id;
+        blocks.chunk_id_end = last_chunk->fd.id;
+        
+		char *key = get_key(blocks);
+        float result = ts_dp_optimization_results_cache_get_entry(dp_optimization_caches.dp_optimization_results_cache, key, &found);
+        if (found)
+			elog(ERROR, "Result already cached - %f", result);
+		free(key);
+
+		// If there is not enough budget exit with error
+		if (is_budget_exhausted)
+		{
+			elog(ERROR, "out of budget");
+			return NULL;
+		}
+
+		// Reserve budget for query from all chunks - budget is fixed to 0.5 for now
+		foreach (lc, chunks)
+			ts_chunk_reserve_privacy_budget(lfirst(lc), 0.5);
+    }
 	return stmt;
 }
 
@@ -1103,27 +1155,12 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 	if (ts_cm_functions->set_rel_pathlist != NULL)
 		ts_cm_functions->set_rel_pathlist(root, rel, rti, rte);
 
-	List *chunks = NIL;
-	ListCell *lchunk;
-
 	switch (reltype)
 	{
 		case TS_REL_HYPERTABLE_CHILD:
 			break;
 		case TS_REL_CHUNK:
 		case TS_REL_CHUNK_CHILD:
-
-			{
-				Chunk *ch = ts_chunk_get_by_relid(rte->relid, false);
-				Assert(ch != NULL);
-				if (ts_chunk_is_budget_exhausted(ch)) {
-					elog(ERROR, "out of budget");
-					return;
-				}
-				chunks = lappend(chunks, ch);
-			}
-
-
 			if (IS_UPDL_CMD(root->parse))
 			{
 				BaserelInfoEntry *chunk_cache_entry =
@@ -1150,13 +1187,6 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 			apply_optimizations(root, reltype, rel, rte, ht);
 			break;
 	}
-
-	// Reserve budget for query from all chunks
-	foreach (lchunk, chunks)
-	{
-		ts_chunk_reserve_privacy_budget(lfirst(lchunk), 0.5);
-	}
-
 }
 
 /* This hook is meant to editorialize about the information the planner gets

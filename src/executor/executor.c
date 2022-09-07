@@ -77,14 +77,14 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
     
     // Todo: run only for DP queries; find a way to identify them
     // This is a temporary hack to run only on my experimental query
-    if (queryId == 251304559932419399) {
+    if (queryId == -364273820602274323) {
     
         bool found;
         Blocks blocks;
         ListCell *lc;
         RangeTblEntry *rte;
     	List *chunks = NIL;
-        DPOptimizationCaches dp_optimization_caches = _dp_optimization_caches_add_get(queryId);
+        DPOptimizationCaches dp_optimization_caches = dp_optimization_caches_add_get(queryId);
         
         // For all chunks involved consume the reserved budget
         foreach (lc, queryDesc->plannedstmt->rtable)
@@ -104,12 +104,16 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
         blocks.chunk_id_start = first_chunk->fd.id;
         blocks.chunk_id_end = last_chunk->fd.id;
         
-        ts_dp_optimization_results_cache_get_entry(dp_optimization_caches.dp_optimization_results_cache, blocks, &found);
+        char *key = get_key(blocks);
+        ts_dp_optimization_results_cache_get_entry(dp_optimization_caches.dp_optimization_results_cache, key, &found);
         if (!found)
         {   // If not already in dp optimization results cache add it
-            ts_dp_optimization_results_cache_write_entry(dp_optimization_caches.dp_optimization_results_cache, blocks, queryDesc->result, &found);
-            ts_dp_optimization_distances_cache_write(dp_optimization_caches.dp_optimization_results_cache, blocks, queryDesc->result);
-        }  
+            ts_dp_optimization_results_cache_write_entry(dp_optimization_caches.dp_optimization_results_cache, key, queryDesc->result, &found);
+            ts_dp_optimization_distances_cache_write(dp_optimization_caches.dp_optimization_distances_cache,
+            dp_optimization_caches.dp_optimization_results_cache, key, queryDesc->result);
+        } 
+        else
+            free(key);
     }
 }
 

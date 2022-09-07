@@ -145,6 +145,7 @@ typedef struct DisplayKeyData
 } DisplayKeyData;
 
 extern bool ts_chunk_is_budget_exhausted(const Chunk *chunk);
+extern bool ts_chunk_has_enough_budget(const Chunk *chunk, float8 val);
 
 extern TSDLLEXPORT bool ts_chunk_reserve_privacy_budget(Chunk *chunk, float8 val);
 

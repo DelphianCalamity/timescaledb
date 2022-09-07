@@ -185,6 +185,15 @@ ts_chunk_is_budget_exhausted(const Chunk *chunk)
 	return false;
 }
 
+bool
+ts_chunk_has_enough_budget(const Chunk *chunk, float8 val)
+{
+	if (ts_privacy_budget_is_enough(chunk->privacy_budget, val)) {
+		return true;
+	}
+	return false;
+}
+
 static HeapTuple
 chunk_formdata_make_tuple(const FormData_chunk *fd, TupleDesc desc)
 {

@@ -7,19 +7,21 @@
 #define TIMESCALEDB_DP_OPTIMIZATION_DISTANCES_CACHE_H
 
 #include <postgres.h>
+#include <catalog/namespace.h>
+
 #include "dp_optimization_caches.h"
 
 Cache *
 dp_optimization_distances_cache_create(void);
 
-extern TSDLLEXPORT void *
-	ts_dp_optimization_distances_cache_get_entry(Cache *cache, const Blocks blocks, bool *found);
+extern TSDLLEXPORT List *
+	ts_dp_optimization_distances_cache_get_entry(Cache *cache,  char *key, bool *found);
 
 extern TSDLLEXPORT void
-	ts_dp_optimization_distances_cache_write(Cache *cache, const Blocks blocks, float result);
+	ts_dp_optimization_distances_cache_write(Cache *distances_cache, Cache *results_cache, char *key, float result);
 
-extern TSDLLEXPORT void
-	ts_dp_optimization_distances_cache_write_entry(Cache *cache, const Blocks blocks, float result, bool *found);
+extern TSDLLEXPORT List *
+	ts_dp_optimization_distances_cache_write_entry(Cache *cache, char *key, bool *found);
 
 extern void ts_dp_optimization_distances_cache_invalidate_callback(Cache **cache);
 

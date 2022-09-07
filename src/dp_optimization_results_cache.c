@@ -19,6 +19,7 @@
 extern Cache* dp_optimization_results_caches_current[NUM_QUERIES];
 extern Cache* dp_optimization_distances_caches_current[NUM_QUERIES];
 extern CachesMap caches_map;
+extern CachesKeys caches_keys;
 
 static void *
 dp_optimization_results_cache_get_key(CacheQuery *query)
@@ -28,8 +29,7 @@ dp_optimization_results_cache_get_key(CacheQuery *query)
 
 typedef struct
 {	
-	// int64 queryId;
-	char key[KEY_SIZE];
+	char key[KEY_SIZE];		//temp hack
 	float result;
 } DpOptimizationResultsCacheEntry;
 
@@ -37,9 +37,7 @@ typedef struct
 static void *
 dp_optimization_results_cache_create_entry(Cache *cache, CacheQuery *query)
 {
-	DpOptimizationResultsCacheEntry *entry = query->result;
-	entry->result = ((DpOptimizationResultsCacheEntry *)query->data)->result;
-	return entry;
+	return query->result;
 }
 
 static bool
@@ -62,7 +60,7 @@ dp_optimization_results_cache_create(void)
 	{
 		.hctl =
 		{
-			.keysize = sizeof(char)*KEY_SIZE, //, //sizeof(int64),
+			.keysize = sizeof(char)*KEY_SIZE,
 			.entrysize = sizeof(DpOptimizationResultsCacheEntry),
 			.hcxt = ctx,
 		},
@@ -89,20 +87,12 @@ ts_dp_optimization_results_cache_invalidate_callback(Cache **cache)
 }
 
 /* Get dp optimization results cache entry. */
-void *
-ts_dp_optimization_results_cache_get_entry(Cache *cache, const Blocks blocks, bool *found)
+float
+ts_dp_optimization_results_cache_get_entry(Cache *cache, char *key, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK | CACHE_FLAG_NOCREATE;
 
-	char key[KEY_SIZE];
-	for (int i=0; i<KEY_SIZE; i++) {
-		key[i] = '\0';
-	}
-	// sprintf(key, "%ld", queryid);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
-
 	CacheQuery query = {
 		.flags = flags,
 		.data = key,
@@ -111,33 +101,35 @@ ts_dp_optimization_results_cache_get_entry(Cache *cache, const Blocks blocks, bo
 
 	DpOptimizationResultsCacheEntry *entry = ts_cache_fetch(cache, &query);
 	if (entry != NULL)
+	{
 		*found = true;
-	return entry;
+		return entry->result;
+	}
+	return 0;
 }
 
 /* Get dp optimization results cache write entry. */
 void
-ts_dp_optimization_results_cache_write_entry(Cache *cache, const Blocks blocks, float result, bool *found)
+ts_dp_optimization_results_cache_write_entry(Cache *cache, char *key, float result, bool *found)
 {
 	*found = false;
 	const unsigned int flags = CACHE_FLAG_MISSING_OK;
 
-	char *key = palloc(KEY_SIZE*sizeof(char));
-	for (int i=0; i<KEY_SIZE; i++) {
-		key[i] = '\0';
-	}
-	// sprintf(key, "%ld", queryid);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_start);
-	sprintf(key+strlen(key), "%d", blocks.chunk_id_end);
-
 	CacheQuery query = {
 		.flags = flags,
 		.data = key,
-
 	};
 	DpOptimizationResultsCacheEntry *entry = ts_cache_fetch(cache, &query);
-	if (entry != NULL)
+	if (entry != NULL) {
 		*found = true;
+		entry->result = result;
+
+		// char *key_ = malloc(100*sizeof(char));
+		// sprintf(key_, "%s", key);
+		// Add key to caches keys
+		caches_keys.entries[caches_keys.counter] = key;
+		caches_keys.counter++;
+	}
 }
 
 Cache*
