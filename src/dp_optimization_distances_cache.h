@@ -23,6 +23,8 @@ extern TSDLLEXPORT void
 extern TSDLLEXPORT List *
 	ts_dp_optimization_distances_cache_write_entry(Cache *cache, char *key, bool *found);
 
+// extern TSDLLEXPORT List *get_substitutes(Blocks blocks, float k);
+
 extern void ts_dp_optimization_distances_cache_invalidate_callback(Cache **cache);
 
 extern TSDLLEXPORT Cache* dp_optimization_distances_cache_get(int i);

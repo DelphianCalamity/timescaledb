@@ -562,19 +562,21 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 
 	planner_hcache_pop(true);
 
+	/************************************************************************************/
+	// uint64 queryId = stmt->queryId;
+	uint64 customQueryId = parse->customQueryId;
+	// uint64 privacyBudget = parse->privacyBudget;
 
-	uint64 queryId = stmt->queryId;
-    
     // Todo: run only for DP queries; find a way to identify them
     // This is a temporary hack to run only on my experimental query
-    if (queryId == -364273820602274323) {
+    if (customQueryId != 0) {
     
         bool found;
         Blocks blocks;
         ListCell *lc;
         RangeTblEntry *rte;
     	List *chunks = NIL;
-        DPOptimizationCaches dp_optimization_caches = dp_optimization_caches_add_get(queryId);
+        DPOptimizationCaches dp_optimization_caches = dp_optimization_caches_add_get(customQueryId);
         
         // For all chunks involved see if they have available budget
 		bool is_budget_exhausted = false;
@@ -603,6 +605,8 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 			elog(ERROR, "Result already cached - %f", result);
 		free(key);
 
+		// Todo: if there is not enough budget -> check for substitutes.
+		// 
 		// If there is not enough budget exit with error
 		if (is_budget_exhausted)
 		{
@@ -613,6 +617,9 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 		// Reserve budget for query from all chunks - budget is fixed to 0.5 for now
 		foreach (lc, chunks)
 			ts_chunk_reserve_privacy_budget(lfirst(lc), 0.5);
+
+	/************************************************************************************/
+
     }
 	return stmt;
 }

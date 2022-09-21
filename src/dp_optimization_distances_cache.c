@@ -184,6 +184,7 @@ ts_dp_optimization_distances_cache_write_entry(Cache *cache, char* key, bool *fo
 	return NULL;
 }
 
+
 Cache*
 dp_optimization_distances_cache_get(int i)
 {
