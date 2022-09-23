@@ -563,12 +563,10 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 	planner_hcache_pop(true);
 
 	/************************************************************************************/
-	// uint64 queryId = stmt->queryId;
-	uint64 customQueryId = parse->customQueryId;
-	// uint64 privacyBudget = parse->privacyBudget;
 
-    // Todo: run only for DP queries; find a way to identify them
-    // This is a temporary hack to run only on my experimental query
+	uint64 customQueryId = parse->customQueryId;
+	uint64 privacyBudget = parse->privacyBudget;
+
     if (customQueryId != 0) {
     
         bool found;
@@ -586,7 +584,7 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
             Chunk *chunk = ts_chunk_get_by_relid(rte->relid, false);
             if (chunk != NULL)
             {
-				if (!ts_chunk_has_enough_budget(chunk, 0.5)) {
+				if (!ts_chunk_has_enough_budget(chunk, (float) privacyBudget)) {
 					is_budget_exhausted = true;
 				}
                 chunks = lappend(chunks, chunk);
@@ -616,7 +614,7 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 
 		// Reserve budget for query from all chunks - budget is fixed to 0.5 for now
 		foreach (lc, chunks)
-			ts_chunk_reserve_privacy_budget(lfirst(lc), 0.5);
+			ts_chunk_reserve_privacy_budget(lfirst(lc), (float) privacyBudget);
 
 	/************************************************************************************/
 

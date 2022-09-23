@@ -46,7 +46,9 @@ set(SOURCES
     version.c
     with_clause_parser.c
     privacy_budget.c
-    dp_optimization_results_cache.c)
+    dp_optimization_results_cache.c
+    dp_optimization_distances_cache.c
+    dp_optimization_caches.c)
 
 # Add test source code in Debug builds
 if(CMAKE_BUILD_TYPE MATCHES Debug)

@@ -84,15 +84,15 @@ cleanup_on_pg_proc_exit(int code, Datum arg)
 #ifdef TS_USE_OPENSSL
 	_conn_ssl_fini();
 #endif
+	_executor_fini();
 	_conn_plain_fini();
 	_guc_fini();
 	_process_utility_fini();
 	_event_trigger_fini();
 	_planner_fini();
 	_cache_invalidate_fini();
-	_hypertable_cache_fini();
-	_executor_fini();
 	_dp_optimization_caches_fini();
+	_hypertable_cache_fini();
 	_cache_fini();
 }
 
@@ -112,13 +112,14 @@ _PG_init(void)
 	_dp_optimization_caches_init();
 	_cache_invalidate_init();
 	_planner_init();
-	_executor_init();
 	_constraint_aware_append_init();
 	_chunk_append_init();
 	_event_trigger_init();
 	_process_utility_init();
 	_guc_init();
 	_conn_plain_init();
+	_executor_init();
+
 #ifdef TS_USE_OPENSSL
 	_conn_ssl_init();
 #endif

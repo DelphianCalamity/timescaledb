@@ -63,7 +63,7 @@ void _executor_fini(void);
 
 static ExecutorFinish_hook_type prev_ExecutorFinish = NULL;
 
-// Allocates budget from chunks and inserts the result in the dp optimization results cache/distances
+// Allocates budget from chunks and inserts the result in a cache
 static void
 timescaledb_executor_finish_hook(QueryDesc *queryDesc)
 {
@@ -73,18 +73,17 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
         prev_ExecutorFinish(queryDesc);
     }
 
-	uint64 queryId = queryDesc->plannedstmt->queryId;
-    
-    // Todo: run only for DP queries; find a way to identify them
-    // This is a temporary hack to run only on my experimental query
-    if (queryId == -364273820602274323) {
+	uint64 customQueryId = queryDesc->plannedstmt->customQueryId;
+	uint64 privacyBudget = queryDesc->plannedstmt->privacyBudget;
+
+    if (customQueryId != 0) {
     
         bool found;
         Blocks blocks;
         ListCell *lc;
         RangeTblEntry *rte;
     	List *chunks = NIL;
-        DPOptimizationCaches dp_optimization_caches = dp_optimization_caches_add_get(queryId);
+        DPOptimizationCaches dp_optimization_caches = dp_optimization_caches_add_get(customQueryId);
         
         // For all chunks involved consume the reserved budget
         foreach (lc, queryDesc->plannedstmt->rtable)
@@ -93,7 +92,7 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
             Chunk *chunk = ts_chunk_get_by_relid(rte->relid, false);
             if (chunk != NULL)
             {
-                ts_chunk_allocate_privacy_budget(chunk, 0.5);
+                ts_chunk_allocate_privacy_budget(chunk, (float) privacyBudget);
                 chunks = lappend(chunks, chunk);
             }
         }
@@ -119,7 +118,7 @@ timescaledb_executor_finish_hook(QueryDesc *queryDesc)
 
 void _executor_init(void)
 {	
-    prev_ExecutorFinish = ExecutorFinish_hook;
+    prev_ExecutorFinish = standard_ExecutorFinish;
     ExecutorFinish_hook = timescaledb_executor_finish_hook;
 }
 
